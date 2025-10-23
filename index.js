@@ -11,46 +11,102 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// middleware
+// ==================== MIDDLEWARE ====================
+
+// Parse JSON request bodies
 app.use(express.json());
+
+// CORS configuration
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true
 }));
+
+// Security headers
 app.use(helmet());
 
-// rate limit
+// ==================== RATE LIMITING ====================
+
+// General rate limiter: 100 requests per minute
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: 100,
+  message: { error: 'Too many requests, please try again later' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 app.use(limiter);
 
-// Stricter rate limit for auth endpoints
+// Stricter rate limiter for auth endpoints: 5 requests per 15 minutes
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 requests per 15 minutes
-  message: { error: 'Too many attempts, please try again later' }
+  max: 5,
+  message: { error: 'Too many login attempts, please try again later' },
+  skipSuccessfulRequests: true, // Don't count successful requests
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
-// health check
+// ==================== HEALTH CHECK ====================
+
 app.get('/health', (req, res) => {
-  res.json({ status: 'Server is running' });
+  res.json({ 
+    status: 'Server is running',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
 });
 
-// routes
-app.use('/api/auth', authLimiter, authRoutes); // Auth routes with stricter rate limit
+// ==================== ROUTES ====================
+
+// Auth routes with stricter rate limiting
+app.use('/api/auth', authLimiter, authRoutes);
+
+// API routes
 app.use('/api', apiRoutes);
 
-// 404 handler
+// ==================== 404 HANDLER ====================
+
 app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+  res.status(404).json({ 
+    success: false,
+    error: 'Route not found',
+    path: req.path,
+    method: req.method,
+    timestamp: new Date().toISOString()
+  });
 });
 
-// error handler
+// ==================== ERROR HANDLER ====================
+
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Internal server error' });
+  console.error('Error:', {
+    message: err.message,
+    stack: err.stack,
+    path: req.path,
+    method: req.method,
+    timestamp: new Date().toISOString()
+  });
+
+  res.status(err.status || 500).json({
+    success: false,
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong',
+    timestamp: new Date().toISOString()
+  });
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// ==================== START SERVER ====================
+
+app.listen(PORT, () => {
+  console.log(`
+╔══════════════════════════════════════╗
+║   ARUNIKA API SERVER STARTED         ║
+╠══════════════════════════════════════╣
+║ Port: ${PORT}                           
+║ Environment: ${process.env.NODE_ENV || 'development'}
+║ Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}
+║ Supabase: ${process.env.SUPABASE_URL ? '✓ Connected' : '✗ Not configured'}
+╚══════════════════════════════════════╝
+  `);
+});
