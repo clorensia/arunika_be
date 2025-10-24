@@ -71,7 +71,6 @@ router.get('/users/:id', async (req, res) => {
 // Update user - only own profile or admin
 router.put('/users/:id', requireAuth, async (req, res) => {
   try {
-    // Check if user is updating their own profile
     if (req.userId !== req.params.id) {
       return sendResponse(res, 403, false, null, 'You can only update your own profile');
     }
@@ -111,7 +110,6 @@ router.delete('/users/:id', requireAuth, async (req, res) => {
       return sendResponse(res, 403, false, null, 'You can only delete your own account');
     }
 
-    // Delete from users table
     const { error: dbError } = await supabase
       .from('users')
       .delete()
@@ -121,7 +119,6 @@ router.delete('/users/:id', requireAuth, async (req, res) => {
       return sendResponse(res, 400, false, null, dbError.message);
     }
 
-    // Delete from auth
     const { error: authError } = await supabase.auth.admin.deleteUser(req.params.id);
 
     if (authError) {
@@ -136,7 +133,6 @@ router.delete('/users/:id', requireAuth, async (req, res) => {
 
 // ==================== PEKERJAAN (Jobs) ====================
 
-// Get all jobs - public
 router.get('/pekerjaan', async (req, res) => {
   try {
     const { from, to, limit } = getPaginationParams(req);
@@ -163,7 +159,6 @@ router.get('/pekerjaan', async (req, res) => {
   }
 });
 
-// Get single job - public
 router.get('/pekerjaan/:id', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -182,7 +177,6 @@ router.get('/pekerjaan/:id', async (req, res) => {
   }
 });
 
-// Create job - requires auth
 router.post('/pekerjaan', requireAuth, async (req, res) => {
   try {
     const { nama_pekerjaan, bidang, link_pekerjaan, deskripsi, requirements } = req.body;
@@ -206,7 +200,6 @@ router.post('/pekerjaan', requireAuth, async (req, res) => {
   }
 });
 
-// Update job - requires auth
 router.put('/pekerjaan/:id', requireAuth, async (req, res) => {
   try {
     const { nama_pekerjaan, bidang, link_pekerjaan, deskripsi, requirements } = req.body;
@@ -227,7 +220,6 @@ router.put('/pekerjaan/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Delete job - requires auth
 router.delete('/pekerjaan/:id', requireAuth, async (req, res) => {
   try {
     const { error } = await supabase
@@ -247,7 +239,6 @@ router.delete('/pekerjaan/:id', requireAuth, async (req, res) => {
 
 // ==================== SKILLUP (Courses) ====================
 
-// Get all skills - public
 router.get('/skillup', async (req, res) => {
   try {
     const { from, to, limit } = getPaginationParams(req);
@@ -274,7 +265,6 @@ router.get('/skillup', async (req, res) => {
   }
 });
 
-// Get single skill - public
 router.get('/skillup/:id', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -293,7 +283,6 @@ router.get('/skillup/:id', async (req, res) => {
   }
 });
 
-// Create skill - requires auth
 router.post('/skillup', requireAuth, async (req, res) => {
   try {
     const { nama_skillup, link_skillup, deskripsi, level } = req.body;
@@ -317,14 +306,13 @@ router.post('/skillup', requireAuth, async (req, res) => {
   }
 });
 
-// Update skill - requires auth
 router.put('/skillup/:id', requireAuth, async (req, res) => {
   try {
     const { nama_skillup, link_skillup, deskripsi, level } = req.body;
 
     const { data, error } = await supabase
       .from('skillup')
-      .update({ nama_skillup, link_skillup, deskripsi, level, updated_at: new Date() })
+      .update({ nama_skillup, link_skillup, deskripsi, level, updated_at: new Date().toISOString() })
       .eq('skill_id', req.params.id)
       .select();
 
@@ -338,7 +326,6 @@ router.put('/skillup/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Delete skill - requires auth
 router.delete('/skillup/:id', requireAuth, async (req, res) => {
   try {
     const { error } = await supabase
@@ -358,10 +345,8 @@ router.delete('/skillup/:id', requireAuth, async (req, res) => {
 
 // ==================== PERSONALIZED ====================
 
-// Get personalized recommendations for user - must be own data
 router.get('/users/:userId/personalized', requireAuth, async (req, res) => {
   try {
-    // Users can only see their own personalizations
     if (req.userId !== req.params.userId) {
       return sendResponse(res, 403, false, null, 'Access denied');
     }
@@ -387,7 +372,6 @@ router.get('/users/:userId/personalized', requireAuth, async (req, res) => {
   }
 });
 
-// Get single personalization
 router.get('/personalized/:id', requireAuth, async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -400,7 +384,6 @@ router.get('/personalized/:id', requireAuth, async (req, res) => {
       return sendResponse(res, 404, false, null, 'Personalization not found');
     }
 
-    // Check if user owns this personalization
     if (data.user_id !== req.userId) {
       return sendResponse(res, 403, false, null, 'Access denied');
     }
@@ -411,12 +394,9 @@ router.get('/personalized/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Create personalized recommendation - requires auth
 router.post('/personalized', requireAuth, async (req, res) => {
   try {
     const { role_fit, strength, skill_gap, level, gap } = req.body;
-
-    // Use authenticated user's ID
     const user_id = req.userId;
 
     const { data, error } = await supabase
@@ -434,10 +414,8 @@ router.post('/personalized', requireAuth, async (req, res) => {
   }
 });
 
-// Update personalization - only own data
 router.put('/personalized/:id', requireAuth, async (req, res) => {
   try {
-    // Check ownership first
     const { data: existing, error: checkError } = await supabase
       .from('personalized')
       .select('user_id')
@@ -456,7 +434,7 @@ router.put('/personalized/:id', requireAuth, async (req, res) => {
 
     const { data, error } = await supabase
       .from('personalized')
-      .update({ role_fit, strength, skill_gap, level, gap, updated_at: new Date() })
+      .update({ role_fit, strength, skill_gap, level, gap, updated_at: new Date().toISOString() })
       .eq('rec_id', req.params.id)
       .select();
 
@@ -472,10 +450,8 @@ router.put('/personalized/:id', requireAuth, async (req, res) => {
 
 // ==================== REC PEKERJAAN ====================
 
-// Get job recommendations for a personalization
 router.get('/personalized/:recId/jobs', requireAuth, async (req, res) => {
   try {
-    // Check ownership
     const { data: personalized, error: checkError } = await supabase
       .from('personalized')
       .select('user_id')
@@ -522,7 +498,6 @@ router.get('/personalized/:recId/jobs', requireAuth, async (req, res) => {
   }
 });
 
-// Add job to personalization recommendations
 router.post('/rec-pekerjaan', requireAuth, async (req, res) => {
   try {
     const { rec_id, pekerjaan_id } = req.body;
@@ -531,7 +506,6 @@ router.post('/rec-pekerjaan', requireAuth, async (req, res) => {
       return sendResponse(res, 400, false, null, 'rec_id and pekerjaan_id are required');
     }
 
-    // Check ownership of personalization
     const { data: personalized, error: checkError } = await supabase
       .from('personalized')
       .select('user_id')
@@ -561,10 +535,8 @@ router.post('/rec-pekerjaan', requireAuth, async (req, res) => {
   }
 });
 
-// Remove job from recommendations
 router.delete('/rec-pekerjaan/:id', requireAuth, async (req, res) => {
   try {
-    // Get the recommendation to check ownership
     const { data: recPekerjaan, error: getError } = await supabase
       .from('rec_pekerjaan')
       .select('rec_id, personalized!inner(user_id)')
@@ -596,10 +568,8 @@ router.delete('/rec-pekerjaan/:id', requireAuth, async (req, res) => {
 
 // ==================== REC SKILLUP ====================
 
-// Get skill recommendations for a personalization
 router.get('/personalized/:recId/skills', requireAuth, async (req, res) => {
   try {
-    // Check ownership
     const { data: personalized, error: checkError } = await supabase
       .from('personalized')
       .select('user_id')
@@ -645,7 +615,6 @@ router.get('/personalized/:recId/skills', requireAuth, async (req, res) => {
   }
 });
 
-// Add skill to personalization recommendations
 router.post('/rec-skillup', requireAuth, async (req, res) => {
   try {
     const { rec_id, skill_id } = req.body;
@@ -654,7 +623,6 @@ router.post('/rec-skillup', requireAuth, async (req, res) => {
       return sendResponse(res, 400, false, null, 'rec_id and skill_id are required');
     }
 
-    // Check ownership
     const { data: personalized, error: checkError } = await supabase
       .from('personalized')
       .select('user_id')
@@ -684,10 +652,8 @@ router.post('/rec-skillup', requireAuth, async (req, res) => {
   }
 });
 
-// Remove skill from recommendations
 router.delete('/rec-skillup/:id', requireAuth, async (req, res) => {
   try {
-    // Get the recommendation to check ownership
     const { data: recSkillup, error: getError } = await supabase
       .from('rec_skillup')
       .select('rec_id, personalized!inner(user_id)')
@@ -719,15 +685,12 @@ router.delete('/rec-skillup/:id', requireAuth, async (req, res) => {
 
 // ==================== COMPLEX QUERIES ====================
 
-// Get complete user profile with all recommendations
 router.get('/profile/:userId', requireAuth, async (req, res) => {
   try {
-    // Users can only view their own full profile
     if (req.userId !== req.params.userId) {
       return sendResponse(res, 403, false, null, 'Access denied');
     }
 
-    // Get user data
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('*')
@@ -738,7 +701,6 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
       return sendResponse(res, 404, false, null, 'User not found');
     }
 
-    // Get personalizations with nested recommendations
     const { data: personalizedData, error: personalizedError } = await supabase
       .from('personalized')
       .select(`
@@ -774,16 +736,16 @@ router.get('/skill-questions/categories', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('skill_questions')
-      .select('role_category')
-      .distinct();
+      .select('role_category');
 
     if (error) {
       return sendResponse(res, 400, false, null, error.message);
     }
 
-    const categories = data.map(d => d.role_category);
+    // Remove duplicates manually using Set
+    const uniqueCategories = [...new Set(data.map(d => d.role_category))];
     
-    sendResponse(res, 200, true, { categories }, null, 'Categories fetched successfully');
+    sendResponse(res, 200, true, { categories: uniqueCategories }, null, 'Categories fetched successfully');
   } catch (err) {
     sendResponse(res, 500, false, null, err.message);
   }
@@ -798,7 +760,6 @@ router.get('/skill-questions', async (req, res) => {
       .from('skill_questions')
       .select('id, text, trait, category, role_category');
 
-    // Filter by role_category if provided
     if (roleCategory) {
       query = query.eq('role_category', roleCategory);
     }
