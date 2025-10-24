@@ -8,6 +8,7 @@
 *.http
 request-auth.http
 requests.http
+request-skill-questions.http
 
 # Dependencies
 node_modules/
