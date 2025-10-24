@@ -11,6 +11,10 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// ==================== TRUST PROXY (PENTING!) ====================
+// Ini untuk production di Railway, Vercel, Heroku, dll
+app.set('trust proxy', 1);
+
 // ==================== MIDDLEWARE ====================
 
 // Parse JSON request bodies
@@ -34,6 +38,14 @@ const limiter = rateLimit({
   message: { error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limit untuk health check
+    return req.path === '/health';
+  },
+  keyGenerator: (req, res) => {
+    // Gunakan X-Forwarded-For header di production, fallback ke req.ip
+    return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip;
+  }
 });
 app.use(limiter);
 
@@ -45,6 +57,9 @@ const authLimiter = rateLimit({
   skipSuccessfulRequests: true, // Don't count successful requests
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req, res) => {
+    return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip;
+  }
 });
 
 // ==================== HEALTH CHECK ====================
@@ -107,6 +122,7 @@ app.listen(PORT, () => {
 ║ Environment: ${process.env.NODE_ENV || 'development'}
 ║ Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}
 ║ Supabase: ${process.env.SUPABASE_URL ? '✓ Connected' : '✗ Not configured'}
+║ Trust Proxy: ${app.get('trust proxy') ? '✓ Enabled' : '✗ Disabled'}
 ╚══════════════════════════════════════╝
   `);
 });
