@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
-import rateLimit, { createIpKeyGenerator } from 'express-rate-limit';
+import rateLimit from 'express-rate-limit';
 import apiRoutes from './routes/apiRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 
@@ -31,11 +31,6 @@ app.use(helmet());
 
 // ==================== RATE LIMITING ====================
 
-// Create IP key generator untuk handle IPv6 & proxy
-const keyGenerator = createIpKeyGenerator({
-  skip: () => false // Process semua requests
-});
-
 // General rate limiter: 100 requests per minute
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
@@ -43,11 +38,7 @@ const limiter = rateLimit({
   message: { error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => {
-    // Skip rate limit untuk health check
-    return req.path === '/health';
-  },
-  keyGenerator
+  skip: (req) => req.path === '/health'
 });
 app.use(limiter);
 
@@ -56,10 +47,9 @@ const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5,
   message: { error: 'Too many login attempts, please try again later' },
-  skipSuccessfulRequests: true, // Don't count successful requests
+  skipSuccessfulRequests: true,
   standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator
+  legacyHeaders: false
 });
 
 // ==================== HEALTH CHECK ====================
