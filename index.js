@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { createIpKeyGenerator } from 'express-rate-limit';
 import apiRoutes from './routes/apiRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 
@@ -31,6 +31,11 @@ app.use(helmet());
 
 // ==================== RATE LIMITING ====================
 
+// Create IP key generator untuk handle IPv6 & proxy
+const keyGenerator = createIpKeyGenerator({
+  skip: () => false // Process semua requests
+});
+
 // General rate limiter: 100 requests per minute
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
@@ -42,10 +47,7 @@ const limiter = rateLimit({
     // Skip rate limit untuk health check
     return req.path === '/health';
   },
-  keyGenerator: (req, res) => {
-    // Gunakan X-Forwarded-For header di production, fallback ke req.ip
-    return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip;
-  }
+  keyGenerator
 });
 app.use(limiter);
 
@@ -57,9 +59,7 @@ const authLimiter = rateLimit({
   skipSuccessfulRequests: true, // Don't count successful requests
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req, res) => {
-    return req.headers['x-forwarded-for']?.split(',')[0].trim() || req.ip;
-  }
+  keyGenerator
 });
 
 // ==================== HEALTH CHECK ====================
