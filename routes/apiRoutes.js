@@ -237,6 +237,168 @@ router.delete('/pekerjaan/:id', requireAuth, async (req, res) => {
   }
 });
 
+// ==================== PEKERJAAN SKILLS BY ROLE & LEVEL ====================
+
+// Get job skills by role category and level
+// Usage: GET /api/pekerjaan/skills/PM/junior
+router.get('/pekerjaan/skills/:role_category/:level', async (req, res) => {
+  try {
+    const { role_category, level } = req.params;
+    
+    // Validate level
+    const validLevels = ['junior', 'middle', 'senior', 'intern'];
+    if (!validLevels.includes(level)) {
+      return sendResponse(res, 400, false, null, `Level must be one of: ${validLevels.join(', ')}`);
+    }
+
+    // Validate role_category
+    const validRoles = ['PM', 'UI/UX', 'BE', 'FE'];
+    if (!validRoles.includes(role_category)) {
+      return sendResponse(res, 400, false, null, `Role must be one of: ${validRoles.join(', ')}`);
+    }
+
+    // Determine which skills column to fetch
+    const skillsColumn = `required_skills_${level}`;
+
+    const { data, error } = await supabase
+      .from('pekerjaan')
+      .select(`
+        pekerjaan_id,
+        nama_pekerjaan,
+        role_category,
+        ${skillsColumn},
+        search_url_linkedin,
+        search_url_jobstreet,
+        search_url_sribulancer,
+        deskripsi
+      `)
+      .eq('role_category', role_category)
+      .single();
+
+    if (error) {
+      return sendResponse(res, 404, false, null, `Job position for ${role_category} not found`);
+    }
+
+    // Format response
+    const response = {
+      pekerjaan_id: data.pekerjaan_id,
+      nama_pekerjaan: data.nama_pekerjaan,
+      role_category: data.role_category,
+      level: level,
+      skills: data[skillsColumn] || [],
+      search_urls: {
+        linkedin: data.search_url_linkedin,
+        jobstreet: data.search_url_jobstreet,
+        sribulancer: data.search_url_sribulancer
+      },
+      deskripsi: data.deskripsi
+    };
+
+    sendResponse(res, 200, true, response, null, `Skills for ${role_category} ${level} fetched successfully`);
+  } catch (err) {
+    sendResponse(res, 500, false, null, err.message);
+  }
+});
+
+// Get all job skills for a role (all levels)
+// Usage: GET /api/pekerjaan/skills/PM/all
+router.get('/pekerjaan/skills/:role_category/all', async (req, res) => {
+  try {
+    const { role_category } = req.params;
+
+    const validRoles = ['PM', 'UI/UX', 'BE', 'FE'];
+    if (!validRoles.includes(role_category)) {
+      return sendResponse(res, 400, false, null, `Role must be one of: ${validRoles.join(', ')}`);
+    }
+
+    const { data, error } = await supabase
+      .from('pekerjaan')
+      .select(`
+        pekerjaan_id,
+        nama_pekerjaan,
+        role_category,
+        required_skills_junior,
+        required_skills_middle,
+        required_skills_senior,
+        search_url_linkedin,
+        search_url_jobstreet,
+        search_url_sribulancer,
+        deskripsi
+      `)
+      .eq('role_category', role_category)
+      .single();
+
+    if (error) {
+      return sendResponse(res, 404, false, null, `Job position for ${role_category} not found`);
+    }
+
+    const response = {
+      pekerjaan_id: data.pekerjaan_id,
+      nama_pekerjaan: data.nama_pekerjaan,
+      role_category: data.role_category,
+      skills: {
+        junior: data.required_skills_junior || [],
+        middle: data.required_skills_middle || [],
+        senior: data.required_skills_senior || []
+      },
+      search_urls: {
+        linkedin: data.search_url_linkedin,
+        jobstreet: data.search_url_jobstreet,
+        sribulancer: data.search_url_sribulancer
+      },
+      deskripsi: data.deskripsi
+    };
+
+    sendResponse(res, 200, true, response, null, `All skills for ${role_category} fetched successfully`);
+  } catch (err) {
+    sendResponse(res, 500, false, null, err.message);
+  }
+});
+
+// Get all available job roles with skills
+// Usage: GET /api/pekerjaan/skills
+router.get('/pekerjaan/skills', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('pekerjaan')
+      .select(`
+        pekerjaan_id,
+        nama_pekerjaan,
+        role_category,
+        required_skills_junior,
+        required_skills_middle,
+        required_skills_senior,
+        search_url_linkedin,
+        search_url_jobstreet,
+        search_url_sribulancer
+      `);
+
+    if (error) {
+      return sendResponse(res, 400, false, null, error.message);
+    }
+
+    const formattedData = data.map(job => ({
+      pekerjaan_id: job.pekerjaan_id,
+      nama_pekerjaan: job.nama_pekerjaan,
+      role_category: job.role_category,
+      skills: {
+        junior: job.required_skills_junior || [],
+        middle: job.required_skills_middle || [],
+        senior: job.required_skills_senior || []
+      },
+      search_urls: {
+        linkedin: job.search_url_linkedin,
+        jobstreet: job.search_url_jobstreet,
+        sribulancer: job.search_url_sribulancer
+      }
+    }));
+
+    sendResponse(res, 200, true, { jobs: formattedData }, null, 'All job skills fetched successfully');
+  } catch (err) {
+    sendResponse(res, 500, false, null, err.message);
+  }
+});
+
 // ==================== SKILLUP (Courses) ====================
 
 router.get('/skillup', async (req, res) => {
