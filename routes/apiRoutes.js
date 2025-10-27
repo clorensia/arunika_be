@@ -26,7 +26,6 @@ const getPaginationParams = (req) => {
 
 // ==================== USERS ====================
 
-// Get all users (admin only or public limited info)
 router.get('/users', optionalAuth, async (req, res) => {
   try {
     const { from, to, limit } = getPaginationParams(req);
@@ -49,7 +48,6 @@ router.get('/users', optionalAuth, async (req, res) => {
   }
 });
 
-// Get single user by ID
 router.get('/users/:id', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -68,16 +66,13 @@ router.get('/users/:id', async (req, res) => {
   }
 });
 
-// Update user - only own profile or admin
 router.put('/users/:id', requireAuth, async (req, res) => {
   try {
-    // Check if user is updating their own profile
     if (req.userId !== req.params.id) {
       return sendResponse(res, 403, false, null, 'You can only update your own profile');
     }
 
     const { name, role, pendidikan, pekerjaan } = req.body;
-
     const updateData = {};
     if (name) updateData.name = name;
     if (pendidikan) updateData.pendidikan = pendidikan;
@@ -104,14 +99,12 @@ router.put('/users/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Delete user - only own account
 router.delete('/users/:id', requireAuth, async (req, res) => {
   try {
     if (req.userId !== req.params.id) {
       return sendResponse(res, 403, false, null, 'You can only delete your own account');
     }
 
-    // Delete from users table
     const { error: dbError } = await supabase
       .from('users')
       .delete()
@@ -121,7 +114,6 @@ router.delete('/users/:id', requireAuth, async (req, res) => {
       return sendResponse(res, 400, false, null, dbError.message);
     }
 
-    // Delete from auth
     const { error: authError } = await supabase.auth.admin.deleteUser(req.params.id);
 
     if (authError) {
@@ -136,7 +128,6 @@ router.delete('/users/:id', requireAuth, async (req, res) => {
 
 // ==================== PEKERJAAN (Jobs) ====================
 
-// Get all jobs - public
 router.get('/pekerjaan', async (req, res) => {
   try {
     const { from, to, limit } = getPaginationParams(req);
@@ -163,7 +154,6 @@ router.get('/pekerjaan', async (req, res) => {
   }
 });
 
-// Get single job - public
 router.get('/pekerjaan/:id', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -182,7 +172,6 @@ router.get('/pekerjaan/:id', async (req, res) => {
   }
 });
 
-// Create job - requires auth
 router.post('/pekerjaan', requireAuth, async (req, res) => {
   try {
     const { nama_pekerjaan, bidang, link_pekerjaan, deskripsi, requirements } = req.body;
@@ -206,7 +195,6 @@ router.post('/pekerjaan', requireAuth, async (req, res) => {
   }
 });
 
-// Update job - requires auth
 router.put('/pekerjaan/:id', requireAuth, async (req, res) => {
   try {
     const { nama_pekerjaan, bidang, link_pekerjaan, deskripsi, requirements } = req.body;
@@ -227,7 +215,6 @@ router.put('/pekerjaan/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Delete job - requires auth
 router.delete('/pekerjaan/:id', requireAuth, async (req, res) => {
   try {
     const { error } = await supabase
@@ -247,53 +234,44 @@ router.delete('/pekerjaan/:id', requireAuth, async (req, res) => {
 
 // ==================== PEKERJAAN SKILLS BY ROLE & LEVEL ====================
 
-// Get job skills by role category and level
-// Usage: GET /api/pekerjaan/skills/PM/junior
-router.get('/pekerjaan/skills/:role_category/:level', async (req, res) => {
+router.get('/pekerjaan-skills/:role_category/:level', async (req, res) => {
   try {
     const { role_category, level } = req.params;
     
-    // Validate level
+    console.log(`[Skills Endpoint] Fetching skills for role: ${role_category}, level: ${level}`);
+    
     const validLevels = ['junior', 'middle', 'senior', 'intern'];
     if (!validLevels.includes(level)) {
       return sendResponse(res, 400, false, null, `Level must be one of: ${validLevels.join(', ')}`);
     }
 
-    // Validate role_category
     const validRoles = ['PM', 'UI/UX', 'BE', 'FE'];
     if (!validRoles.includes(role_category)) {
       return sendResponse(res, 400, false, null, `Role must be one of: ${validRoles.join(', ')}`);
     }
 
-    // Determine which skills column to fetch
-    const skillsColumn = `required_skills_${level}`;
-
     const { data, error } = await supabase
       .from('pekerjaan')
-      .select(`
-        pekerjaan_id,
-        nama_pekerjaan,
-        role_category,
-        ${skillsColumn},
-        search_url_linkedin,
-        search_url_jobstreet,
-        search_url_sribulancer,
-        deskripsi
-      `)
+      .select('*')
       .eq('role_category', role_category)
       .single();
 
     if (error) {
+      console.error(`[Skills Endpoint] Error: ${error.message}`);
       return sendResponse(res, 404, false, null, `Job position for ${role_category} not found`);
     }
 
-    // Format response
+    const skillsColumn = `required_skills_${level}`;
+    const skills = data[skillsColumn] || [];
+
+    console.log(`[Skills Endpoint] Found skills for ${level}:`, skills);
+
     const response = {
       pekerjaan_id: data.pekerjaan_id,
       nama_pekerjaan: data.nama_pekerjaan,
       role_category: data.role_category,
       level: level,
-      skills: data[skillsColumn] || [],
+      skills: skills,
       search_urls: {
         linkedin: data.search_url_linkedin,
         jobstreet: data.search_url_jobstreet,
@@ -304,13 +282,12 @@ router.get('/pekerjaan/skills/:role_category/:level', async (req, res) => {
 
     sendResponse(res, 200, true, response, null, `Skills for ${role_category} ${level} fetched successfully`);
   } catch (err) {
+    console.error(`[Skills Endpoint] Exception:`, err.message);
     sendResponse(res, 500, false, null, err.message);
   }
 });
 
-// Get all job skills for a role (all levels)
-// Usage: GET /api/pekerjaan/skills/PM/all
-router.get('/pekerjaan/skills/:role_category/all', async (req, res) => {
+router.get('/pekerjaan-skills/:role_category/all', async (req, res) => {
   try {
     const { role_category } = req.params;
 
@@ -321,18 +298,7 @@ router.get('/pekerjaan/skills/:role_category/all', async (req, res) => {
 
     const { data, error } = await supabase
       .from('pekerjaan')
-      .select(`
-        pekerjaan_id,
-        nama_pekerjaan,
-        role_category,
-        required_skills_junior,
-        required_skills_middle,
-        required_skills_senior,
-        search_url_linkedin,
-        search_url_jobstreet,
-        search_url_sribulancer,
-        deskripsi
-      `)
+      .select('*')
       .eq('role_category', role_category)
       .single();
 
@@ -363,23 +329,11 @@ router.get('/pekerjaan/skills/:role_category/all', async (req, res) => {
   }
 });
 
-// Get all available job roles with skills
-// Usage: GET /api/pekerjaan/skills
-router.get('/pekerjaan/skills', async (req, res) => {
+router.get('/pekerjaan-skills', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('pekerjaan')
-      .select(`
-        pekerjaan_id,
-        nama_pekerjaan,
-        role_category,
-        required_skills_junior,
-        required_skills_middle,
-        required_skills_senior,
-        search_url_linkedin,
-        search_url_jobstreet,
-        search_url_sribulancer
-      `);
+      .select('*');
 
     if (error) {
       return sendResponse(res, 400, false, null, error.message);
@@ -409,7 +363,6 @@ router.get('/pekerjaan/skills', async (req, res) => {
 
 // ==================== SKILLUP (Courses) ====================
 
-// Get all skills - public
 router.get('/skillup', async (req, res) => {
   try {
     const { from, to, limit } = getPaginationParams(req);
@@ -436,7 +389,6 @@ router.get('/skillup', async (req, res) => {
   }
 });
 
-// Get single skill - public
 router.get('/skillup/:id', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -455,7 +407,6 @@ router.get('/skillup/:id', async (req, res) => {
   }
 });
 
-// Create skill - requires auth
 router.post('/skillup', requireAuth, async (req, res) => {
   try {
     const { nama_skillup, link_skillup, deskripsi, level } = req.body;
@@ -479,7 +430,6 @@ router.post('/skillup', requireAuth, async (req, res) => {
   }
 });
 
-// Update skill - requires auth
 router.put('/skillup/:id', requireAuth, async (req, res) => {
   try {
     const { nama_skillup, link_skillup, deskripsi, level } = req.body;
@@ -500,7 +450,6 @@ router.put('/skillup/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Delete skill - requires auth
 router.delete('/skillup/:id', requireAuth, async (req, res) => {
   try {
     const { error } = await supabase
@@ -520,10 +469,8 @@ router.delete('/skillup/:id', requireAuth, async (req, res) => {
 
 // ==================== PERSONALIZED ====================
 
-// Get personalized recommendations for user - must be own data
 router.get('/users/:userId/personalized', requireAuth, async (req, res) => {
   try {
-    // Users can only see their own personalizations
     if (req.userId !== req.params.userId) {
       return sendResponse(res, 403, false, null, 'Access denied');
     }
@@ -549,7 +496,6 @@ router.get('/users/:userId/personalized', requireAuth, async (req, res) => {
   }
 });
 
-// Get single personalization
 router.get('/personalized/:id', requireAuth, async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -562,7 +508,6 @@ router.get('/personalized/:id', requireAuth, async (req, res) => {
       return sendResponse(res, 404, false, null, 'Personalization not found');
     }
 
-    // Check if user owns this personalization
     if (data.user_id !== req.userId) {
       return sendResponse(res, 403, false, null, 'Access denied');
     }
@@ -573,12 +518,9 @@ router.get('/personalized/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Create personalized recommendation - requires auth
 router.post('/personalized', requireAuth, async (req, res) => {
   try {
     const { role_fit, strength, skill_gap, level, gap } = req.body;
-
-    // Use authenticated user's ID
     const user_id = req.userId;
 
     const { data, error } = await supabase
@@ -596,10 +538,8 @@ router.post('/personalized', requireAuth, async (req, res) => {
   }
 });
 
-// Update personalization - only own data
 router.put('/personalized/:id', requireAuth, async (req, res) => {
   try {
-    // Check ownership first
     const { data: existing, error: checkError } = await supabase
       .from('personalized')
       .select('user_id')
@@ -634,10 +574,8 @@ router.put('/personalized/:id', requireAuth, async (req, res) => {
 
 // ==================== REC PEKERJAAN ====================
 
-// Get job recommendations for a personalization
 router.get('/personalized/:recId/jobs', requireAuth, async (req, res) => {
   try {
-    // Check ownership
     const { data: personalized, error: checkError } = await supabase
       .from('personalized')
       .select('user_id')
@@ -656,18 +594,7 @@ router.get('/personalized/:recId/jobs', requireAuth, async (req, res) => {
 
     const { data, error, count } = await supabase
       .from('rec_pekerjaan')
-      .select(`
-        repekerjaan_id,
-        created_at,
-        pekerjaan (
-          pekerjaan_id,
-          nama_pekerjaan,
-          bidang,
-          link_pekerjaan,
-          deskripsi,
-          requirements
-        )
-      `, { count: 'exact' })
+      .select(`repekerjaan_id, created_at, pekerjaan(*)`, { count: 'exact' })
       .eq('rec_id', req.params.recId)
       .range(from, to);
 
@@ -684,7 +611,6 @@ router.get('/personalized/:recId/jobs', requireAuth, async (req, res) => {
   }
 });
 
-// Add job to personalization recommendations
 router.post('/rec-pekerjaan', requireAuth, async (req, res) => {
   try {
     const { rec_id, pekerjaan_id } = req.body;
@@ -693,7 +619,6 @@ router.post('/rec-pekerjaan', requireAuth, async (req, res) => {
       return sendResponse(res, 400, false, null, 'rec_id and pekerjaan_id are required');
     }
 
-    // Check ownership of personalization
     const { data: personalized, error: checkError } = await supabase
       .from('personalized')
       .select('user_id')
@@ -723,10 +648,8 @@ router.post('/rec-pekerjaan', requireAuth, async (req, res) => {
   }
 });
 
-// Remove job from recommendations
 router.delete('/rec-pekerjaan/:id', requireAuth, async (req, res) => {
   try {
-    // Get the recommendation to check ownership
     const { data: recPekerjaan, error: getError } = await supabase
       .from('rec_pekerjaan')
       .select('rec_id, personalized!inner(user_id)')
@@ -758,10 +681,8 @@ router.delete('/rec-pekerjaan/:id', requireAuth, async (req, res) => {
 
 // ==================== REC SKILLUP ====================
 
-// Get skill recommendations for a personalization
 router.get('/personalized/:recId/skills', requireAuth, async (req, res) => {
   try {
-    // Check ownership
     const { data: personalized, error: checkError } = await supabase
       .from('personalized')
       .select('user_id')
@@ -780,17 +701,7 @@ router.get('/personalized/:recId/skills', requireAuth, async (req, res) => {
 
     const { data, error, count } = await supabase
       .from('rec_skillup')
-      .select(`
-        recskillup_id,
-        created_at,
-        skillup (
-          skill_id,
-          nama_skillup,
-          link_skillup,
-          deskripsi,
-          level
-        )
-      `, { count: 'exact' })
+      .select(`recskillup_id, created_at, skillup(*)`, { count: 'exact' })
       .eq('rec_id', req.params.recId)
       .range(from, to);
 
@@ -807,7 +718,6 @@ router.get('/personalized/:recId/skills', requireAuth, async (req, res) => {
   }
 });
 
-// Add skill to personalization recommendations
 router.post('/rec-skillup', requireAuth, async (req, res) => {
   try {
     const { rec_id, skill_id } = req.body;
@@ -816,7 +726,6 @@ router.post('/rec-skillup', requireAuth, async (req, res) => {
       return sendResponse(res, 400, false, null, 'rec_id and skill_id are required');
     }
 
-    // Check ownership
     const { data: personalized, error: checkError } = await supabase
       .from('personalized')
       .select('user_id')
@@ -846,10 +755,8 @@ router.post('/rec-skillup', requireAuth, async (req, res) => {
   }
 });
 
-// Remove skill from recommendations
 router.delete('/rec-skillup/:id', requireAuth, async (req, res) => {
   try {
-    // Get the recommendation to check ownership
     const { data: recSkillup, error: getError } = await supabase
       .from('rec_skillup')
       .select('rec_id, personalized!inner(user_id)')
@@ -881,15 +788,12 @@ router.delete('/rec-skillup/:id', requireAuth, async (req, res) => {
 
 // ==================== COMPLEX QUERIES ====================
 
-// Get complete user profile with all recommendations
 router.get('/profile/:userId', requireAuth, async (req, res) => {
   try {
-    // Users can only view their own full profile
     if (req.userId !== req.params.userId) {
       return sendResponse(res, 403, false, null, 'Access denied');
     }
 
-    // Get user data
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('*')
@@ -900,20 +804,9 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
       return sendResponse(res, 404, false, null, 'User not found');
     }
 
-    // Get personalizations with nested recommendations
     const { data: personalizedData, error: personalizedError } = await supabase
       .from('personalized')
-      .select(`
-        *,
-        rec_pekerjaan (
-          repekerjaan_id,
-          pekerjaan (*)
-        ),
-        rec_skillup (
-          recskillup_id,
-          skillup (*)
-        )
-      `)
+      .select(`*, rec_pekerjaan(repekerjaan_id, pekerjaan(*)), rec_skillup(recskillup_id, skillup(*))`)
       .eq('user_id', req.params.userId);
 
     if (personalizedError) {
@@ -931,7 +824,6 @@ router.get('/profile/:userId', requireAuth, async (req, res) => {
 
 // ==================== SKILL QUESTIONS ====================
 
-// Get all skill questions (PUBLIC - with optional role filter)
 router.get('/skill-questions', async (req, res) => {
   try {
     const roleCategory = req.query.role_category;
@@ -940,7 +832,6 @@ router.get('/skill-questions', async (req, res) => {
       .from('skill_questions')
       .select('id, text, trait, category, role_category');
 
-    // Filter by role_category if provided
     if (roleCategory) {
       query = query.eq('role_category', roleCategory);
     }
@@ -960,7 +851,6 @@ router.get('/skill-questions', async (req, res) => {
   }
 });
 
-// Get all role categories (PUBLIC)
 router.get('/skill-questions/categories', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -980,7 +870,6 @@ router.get('/skill-questions/categories', async (req, res) => {
   }
 });
 
-// Get single question
 router.get('/skill-questions/:id', async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -999,7 +888,6 @@ router.get('/skill-questions/:id', async (req, res) => {
   }
 });
 
-// Create question (Protected - requires auth)
 router.post('/skill-questions', requireAuth, async (req, res) => {
   try {
     const { text, trait, category, role_category } = req.body;
@@ -1033,7 +921,6 @@ router.post('/skill-questions', requireAuth, async (req, res) => {
   }
 });
 
-// Update question (Protected - requires auth)
 router.put('/skill-questions/:id', requireAuth, async (req, res) => {
   try {
     const { text, trait, category, role_category } = req.body;
@@ -1074,7 +961,6 @@ router.put('/skill-questions/:id', requireAuth, async (req, res) => {
   }
 });
 
-// Delete question (Protected - requires auth)
 router.delete('/skill-questions/:id', requireAuth, async (req, res) => {
   try {
     const { error } = await supabase
